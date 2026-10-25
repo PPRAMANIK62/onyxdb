@@ -9,6 +9,7 @@
 
 #![warn(missing_docs)]
 
+pub mod crc;
 mod error;
 pub mod header;
 pub mod page;
