@@ -11,9 +11,13 @@
 
 pub mod crc;
 mod error;
+pub mod file;
 pub mod header;
 pub mod page;
+pub mod store;
 
 pub use error::{Error, Result};
+pub use file::PageFile;
 pub use header::Header;
 pub use page::{Page, PageKind, PageNo};
+pub use store::PageStore;
