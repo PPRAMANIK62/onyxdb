@@ -45,8 +45,8 @@ pub struct Header {
     pub free_head: Option<PageNo>,
     /// 22: how many pages are on the freelist.
     pub free_count: u32,
-    /// 26: bytes this crate never reads, kept for the code that uses it.
-    /// A B-tree keeps its root page number here.
+    /// 26: bytes this crate never reads, kept for the code that uses it, for
+    /// example to remember the page its data starts at.
     pub user: [u8; USER_LEN],
 }
 
