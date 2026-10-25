@@ -5,11 +5,14 @@
 //! a checksum, so a damaged page is caught when it's read.
 //!
 //! - `page`: page numbers, page kinds and the bytes of one page.
+//! - `header`: the header in page 0.
 
 #![warn(missing_docs)]
 
 mod error;
+pub mod header;
 pub mod page;
 
 pub use error::{Error, Result};
+pub use header::Header;
 pub use page::{Page, PageKind, PageNo};
