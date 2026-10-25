@@ -14,7 +14,7 @@
 
 use std::{fmt, num::NonZeroU32};
 
-use crate::Result;
+use crate::{Error, Result, crc::crc32c};
 
 /// The smallest page size a file can use, in bytes.
 pub const MIN_PAGE_SIZE: usize = 512;
@@ -22,6 +22,9 @@ pub const MIN_PAGE_SIZE: usize = 512;
 /// The largest page size, in bytes. Offsets inside a page are stored as `u16`,
 /// which can't hold 65536, so the largest power of two that fits is 32768.
 pub const MAX_PAGE_SIZE: usize = 32768;
+
+/// Bytes at the end of every page that hold its checksum.
+pub const CHECKSUM_LEN: usize = 4;
 
 /// Checks that `size` is a power of two from `MIN_PAGE_SIZE` to `MAX_PAGE_SIZE`.
 pub fn check_page_size(size: u32) -> Result<usize> {
@@ -161,6 +164,35 @@ impl Page {
     /// Writes `value` as a little-endian u32 at byte `at`.
     pub fn put_u32(&mut self, at: usize, value: u32) {
         self.bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    /// The bytes a page's format can use: everything before the checksum.
+    pub fn usable(&self) -> usize {
+        self.size() - CHECKSUM_LEN
+    }
+
+    /// Computes the checksum of the usable bytes and stores it in the last 4 bytes.
+    pub fn seal(&mut self) {
+        let end = self.usable();
+        let sum = crc32c(&self.bytes[..end]);
+        self.put_u32(end, sum);
+    }
+
+    /// Checks the stored checksum of the usable bytes. `number` is the page's
+    /// number for the error message.
+    pub fn verify(&self, number: u32) -> Result<()> {
+        let end = self.usable();
+        let stored = self.u32_at(end);
+        let computed = crc32c(&self.bytes[..end]);
+        if stored == computed {
+            Ok(())
+        } else {
+            Err(Error::Checksum {
+                page: number,
+                stored,
+                computed,
+            })
+        }
     }
 }
 
