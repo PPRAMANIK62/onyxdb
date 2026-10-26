@@ -1,6 +1,7 @@
 //! Helpers shared by the integration tests.
 
 // Every test file compiles this module, but each uses only some of it.
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
