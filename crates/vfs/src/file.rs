@@ -42,8 +42,8 @@ pub trait Vfs: Send + Sync {
     /// The paths of everything in the directory `dir`, sorted.
     fn list(&self, dir: &Path) -> Result<Vec<PathBuf>>;
 
-    /// Waits until the names in `dir` are on the disk: files created, removed
-    /// and renamed there since the last `sync_dir`.
+    /// Waits until the files created, removed and renamed in `dir` since the
+    /// last `sync_dir` are on the disk.
     fn sync_dir(&self, dir: &Path) -> Result<()>;
 }
 
@@ -71,8 +71,8 @@ pub trait File: Send + Sync {
     /// Waits until every write to this file so far is on the disk.
     fn sync(&self) -> Result<()>;
 
-    /// Takes an exclusive lock on the file, or fails with `Error::Locked`,
-    /// if another handle holds it. The lock lasts until this handle is dropped.
-    /// Calling it again on the handle that holds the lock, succeeds.
+    /// Locks the file, or fails with `Error::Locked` if another handle has the
+    /// lock. The lock is released when this handle is dropped. Calling it again
+    /// on the same handle succeeds.
     fn try_lock(&self) -> Result<()>;
 }

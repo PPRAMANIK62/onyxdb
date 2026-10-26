@@ -53,7 +53,7 @@ impl Vfs for Disk {
         let file = options
             .open(&real)
             .map_err(|e| Error::from_io("open", path, e))?;
-        // Opening a directory succeeds on Unix, using it as a file doesn't.
+        // Opening a directory succeeds on Unix, but using it as a file doesn't.
         let is_dir = file
             .metadata()
             .map_err(|e| Error::from_io("open", path, e))?
@@ -169,8 +169,8 @@ impl File for DiskFile {
     }
 
     fn try_lock(&self) -> Result<()> {
-        // `flock` underneath: the lock belongs to this open file and goes
-        // away when the file is closed.
+        // This is `flock`: the lock belongs to this open file, and closing the
+        // file releases it.
         match self.file.try_lock() {
             Ok(()) => Ok(()),
             Err(fs::TryLockError::WouldBlock) => Err(Error::Locked(self.path.clone())),

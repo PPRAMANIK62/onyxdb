@@ -8,7 +8,7 @@ use std::{error, fmt, io, path::PathBuf, result};
 /// Everything that can go wrong with a file or directory.
 #[derive(Debug)]
 pub enum Error {
-    /// The operating system refused, for a reason with no variant of its own.
+    /// Any other error from the operating system.
     Io {
         /// What was being done: "open", "write", "sync" and so on.
         op: &'static str,
@@ -52,8 +52,8 @@ pub enum Error {
 pub type Result<T> = result::Result<T, Error>;
 
 impl Error {
-    /// Turns an `io::Error` from `op` on `path` into an `Error`, giving the
-    /// common cases their own variants.
+    /// Turns an `io::Error` from `op` on `path` into an `Error`. Common
+    /// errors, like a missing file, get their own variant.
     pub fn from_io(op: &'static str, path: impl Into<PathBuf>, source: io::Error) -> Error {
         let path = path.into();
         match source.kind() {
