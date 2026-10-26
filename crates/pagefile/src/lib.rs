@@ -1,12 +1,4 @@
-//! A file of fixed-size, numbered pages.
-//!
-//! The file is cut into pages of one size. Page 0 is a header that says what
-//! the file is. Every other page holds one kind of thing. Every page ends with
-//! a checksum, so a damaged page is caught when it's read.
-//!
-//! - `page`: page numbers, page kinds and the bytes of one page.
-//! - `header`: the header in page 0.
-
+#![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
 pub mod crc;
