@@ -1,3 +1,11 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"

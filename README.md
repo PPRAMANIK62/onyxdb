@@ -10,31 +10,36 @@ Each crate has a README with its design, its format and the decisions behind it.
 
 | Build | Crate | What it is | State |
 |---|---|---|---|
-| 1 | [`pagefile`](crates/pagefile) | a file of fixed-size, checksummed pages | in progress |
-| 2 | `bufpool` | a buffer pool that keeps hot pages in memory | planned |
-| 3 | `wal` | a write-ahead log and crash recovery | planned |
-| 4 | `kv` | the ordered key-value trait every engine implements, with a model and a shared test suite | planned |
-| 5 | `btree` | a B+tree engine | planned |
-| 6 | `lsm` | a log-structured merge tree engine | planned |
-| 7 | `mvcc` | transactions with snapshots, on any engine | planned |
-| 8 | `sql` | parser, catalog, planner and executor | planned |
-| 9 | `wire` | the client-server protocol | planned |
-| 10 | `server` | sessions over TCP, many clients at once | planned |
-| 11 | `client` | a client library and a REPL | planned |
-| 12 | `onyxdb` | the database binary, wiring every layer together | planned |
+| 1 | `vfs` | file I/O behind a trait, with crashes and failed `fsync`s you can inject | planned |
+| 2 | [`pagefile`](crates/pagefile) | a file of fixed-size, checksummed pages | in progress |
+| 3 | `bufpool` | a buffer pool that keeps hot pages in memory | planned |
+| 4 | `wal` | a write-ahead log and crash recovery | planned |
+| 5 | `kv` | the ordered key-value trait, an in-memory model engine and a shared test suite | planned |
+| 6 | `mvcc` | transactions: snapshots, serializable checks, locks and deadlocks | planned |
+| 7 | `sql` | parser, catalog, planner and executor, within a memory budget | planned |
+| 8 | `wire` | the client-server protocol | planned |
+| 9 | `server` | sessions over TCP, many clients at once | planned |
+| 10 | `client` | a client library and a REPL | planned |
+| 11 | `btree` | a B+tree engine | planned |
+| 12 | `lsm` | a log-structured merge tree engine | planned |
+| 13 | `onyxdb` | the database binary, wiring every layer together | planned |
+
+By build 10 the whole stack runs on the in-memory model engine. Builds 11 and 12 put real engines underneath.
 
 ## Build and test
 
 ```text
 cargo test
-cargo clippy --all-targets
+cargo clippy --all-targets -- -D warnings
+cargo fmt --check
 cargo doc --open
 ```
 
-The compiler is pinned in `rust-toolchain.toml`.
+The compiler is pinned in `rust-toolchain.toml`. CI runs the same checks on every push.
 
 ## Rules
 
 - Standard library only. A crate depends on nothing but the crates below it.
+- No `unsafe`, and all file I/O goes through `vfs`.
 - Dependencies point down. `sql` can use `mvcc`; `mvcc` never uses `sql`. When a lower crate needs something from above, it defines a trait and the crate above implements it.
 - Each crate's README describes the code as it is now, and changes in the same commit as the code.
