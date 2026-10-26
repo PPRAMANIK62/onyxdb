@@ -18,7 +18,8 @@ use std::{
 
 use crate::{
     Error, Mem, Result, Rng,
-    mem::{Change, Dir, Faults, Inode, Node, State, write_into},
+    fault::Faults,
+    mem::{Change, Dir, Inode, Node, State, write_into},
 };
 
 /// The size of a sector, the unit a disk writes in, in bytes.

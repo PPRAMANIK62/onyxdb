@@ -5,6 +5,8 @@
 
 use std::{error, fmt, io, path::PathBuf, result};
 
+use crate::Fault;
+
 /// Everything that can go wrong with a file or directory.
 #[derive(Debug)]
 pub enum Error {
@@ -51,6 +53,8 @@ pub enum Error {
     /// The power is off. `Mem::power_off_after` set how many changes could
     /// happen, and they're used up. Every change fails until `Mem::crash`.
     PowerOff,
+    /// A fault injected with `Mem::fail_next`.
+    Injected(Fault),
 }
 
 /// What every function in this crate returns.
@@ -109,6 +113,7 @@ impl fmt::Display for Error {
                 path.display()
             ),
             Error::PowerOff => write!(f, "the power is off"),
+            Error::Injected(fault) => write!(f, "injected fault: {}", fault.name()),
         }
     }
 }

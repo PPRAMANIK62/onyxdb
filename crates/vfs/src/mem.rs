@@ -29,7 +29,7 @@ use std::{
     },
 };
 
-use crate::{Error, File, Open, Result, Vfs, disk::check_path};
+use crate::{Error, File, Open, Result, Vfs, disk::check_path, fault::Faults};
 
 /// A file system in memory. A clone is another handle to the same file system.
 #[derive(Clone)]
@@ -109,19 +109,6 @@ pub(crate) enum NameChange {
     Remove(OsString),
     /// A name changed, replacing whatever had the new name.
     Rename(OsString, OsString),
-}
-
-#[derive(Default)]
-pub(crate) struct Faults;
-
-impl State {
-    pub(crate) fn write_fault(&mut self, len: usize) -> (usize, Result<()>) {
-        (len, Ok(()))
-    }
-
-    pub(crate) fn sync_fault(&mut self, _inode: usize) -> Result<()> {
-        Ok(())
-    }
 }
 
 impl NameChange {
