@@ -115,17 +115,6 @@ pub(crate) enum NameChange {
 pub(crate) struct Faults;
 
 impl State {
-    /// Counts one change, or refuses it if the power is off.
-    pub(crate) fn change(&mut self) -> Result<()> {
-        match self.power_left {
-            Some(0) => return Err(Error::PowerOff),
-            Some(n) => self.power_left = Some(n - 1),
-            None => {}
-        }
-        self.changes += 1;
-        Ok(())
-    }
-
     pub(crate) fn write_fault(&mut self, len: usize) -> (usize, Result<()>) {
         (len, Ok(()))
     }

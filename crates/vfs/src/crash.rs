@@ -17,8 +17,8 @@ use std::{
 };
 
 use crate::{
-    Mem, Rng,
-    mem::{Change, Dir, Faults, Inode, Node, write_into},
+    Error, Mem, Result, Rng,
+    mem::{Change, Dir, Faults, Inode, Node, State, write_into},
 };
 
 /// The size of a sector, the unit a disk writes in, in bytes.
@@ -65,6 +65,19 @@ impl Mem {
         state.faults = Faults::default();
         // The process that held them is gone.
         state.locked.clear();
+    }
+}
+
+impl State {
+    /// Counts one change, or refuses it if the power is off.
+    pub(crate) fn change(&mut self) -> Result<()> {
+        match self.power_left {
+            Some(0) => return Err(Error::PowerOff),
+            Some(n) => self.power_left = Some(n - 1),
+            None => {}
+        }
+        self.changes += 1;
+        Ok(())
     }
 }
 
