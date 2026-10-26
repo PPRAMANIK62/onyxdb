@@ -1,4 +1,4 @@
-//! Fille I/O behind a trait, so a database can run on the real disk or
+//! File I/O behind a trait, so a database can run on the real disk or
 //! on a file system in memory that loses power on command.
 //!
 //! - `file`: the `Vfs` and `File` traits every caller uses.
