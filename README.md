@@ -10,7 +10,7 @@ Each crate has a README with its design, its format and the decisions behind it.
 
 | Build | Crate | What it is | State |
 |---|---|---|---|
-| 1 | [`vfs`](crates/vfs) | file I/O behind a trait: a real disk, and one in memory that crashes, tears writes and fails `fsync`; file locks | in progress |
+| 1 | [`vfs`](crates/vfs) | file I/O behind a trait: the real disk, or a file system in memory that can crash, tear writes and fail `fsync`. Also file locks | in progress |
 | 2 | [`pagefile`](crates/pagefile) | a file of fixed-size, checksummed pages | in progress |
 | 3 | `bufpool` | a buffer pool: frames, eviction, the write-ahead rule, latches | planned |
 | 4 | `wal` | a write-ahead log: group commit, replay, checkpoints | planned |
@@ -22,7 +22,7 @@ Each crate has a README with its design, its format and the decisions behind it.
 | 10 | `client` | a client library and a REPL | planned |
 | 11 | `btree` | a B+tree engine, crash-safe through page images in the log | planned |
 | 12 | `lsm` | a log-structured merge tree engine | planned |
-| 13 | `onyxdb` | the binary: owns the data directory, recovers, serves; integrity check and backup | planned |
+| 13 | `onyxdb` | the binary: owns the data directory, recovers and serves clients. Also integrity checks and backups | planned |
 
 By build 10 the whole stack runs on the in-memory model engine. Builds 11 and 12 put real engines underneath.
 
@@ -41,5 +41,5 @@ The compiler is pinned in `rust-toolchain.toml`. CI runs the same checks on ever
 
 - Standard library only. A crate depends on nothing but the crates below it.
 - No `unsafe`, and all file I/O goes through `vfs`.
-- Dependencies point down. `sql` can use `mvcc`; `mvcc` never uses `sql`. When a lower crate needs something from above, it defines a trait and the crate above implements it.
+- Dependencies point down. `sql` can use `mvcc`, but `mvcc` never uses `sql`. When a lower crate needs something from above, it defines a trait and the crate above implements it.
 - Each crate's README describes the code as it is now, and changes in the same commit as the code.

@@ -2,7 +2,7 @@
 
 onyxdb is a SQL database built to learn how databases work inside. It covers what a real database must do: store data in its own format, survive crashes, cache pages, index, run SQL, isolate transactions, and serve many clients. Where there's a choice, it takes the simplest design that's still correct. Speed comes second.
 
-Only `pagefile` exists so far. Everything else here is the plan, and each crate's README replaces its section's "plan" with "how it is" as it lands.
+Only `vfs` and `pagefile` exist so far, and both are in progress. Everything else here is the plan. As each crate is built, its README describes how it actually works.
 
 ## Principles
 
@@ -66,7 +66,7 @@ flowchart LR
 
 ```text
 data/
-  LOCK              held by the running process; a second one is refused
+  LOCK              held by the running process. A second one is refused
   onyxdb.conf       engine, port, memory budget
   btree/            when the B-tree engine was chosen
     data.pf           the page file
@@ -97,8 +97,8 @@ What a crash keeps in `Mem`:
 
 | | Survives when |
 |---|---|
-| file bytes | synced; later writes kept, lost or torn per 512-byte sector |
-| names | synced with `sync_dir`; later changes survive as a prefix |
+| file bytes | always, once synced. Later writes are kept, lost or torn, per 512-byte sector |
+| names | always, once synced with `sync_dir`. Later changes survive as a prefix |
 | after a failed `sync` | the unsynced writes are gone for good |
 
 `crash_test` runs any workload, cuts the power after every change it makes, crashes with many seeds, and checks what's left. Every layer above uses it.
@@ -125,7 +125,7 @@ kinds: 0 empty · 1 free · 2 slotted · 3 overflow        page 0: the header
 | freelist | freed pages, linked through themselves, reused before the file grows |
 | `PageStore` | read and write pages by number. The freelist and overflow code work through it |
 
-Allocation goes through `PageStore`, so with a buffer pool in front, every change, including the header and the freelist, lands in a cached frame and is logged before it reaches the file.
+Allocation goes through `PageStore`. So with a buffer pool in front, every change lands in a cached frame and is logged before it reaches the file. That includes changes to the header and the freelist.
 
 ## 3. Buffer pool: `bufpool`
 
@@ -141,7 +141,7 @@ page table (own hash table)        frames
 ```
 
 - **Eviction** picks an unpinned frame, behind a trait: CLOCK, then LRU-K, which a sequential scan can't flush.
-- **The write-ahead rule.** A dirty page may reach the file only after the log is on disk up to its LSN. The pool asks through a hook trait it defines; the B-tree plugs `wal` into it.
+- **The write-ahead rule.** A dirty page may reach the file only after the log is on disk up to its LSN. The pool asks through a hook trait it defines, and the B-tree plugs `wal` into it.
 - **Latches** protect frames for the few instructions of a read or write. None is held during I/O.
 
 ```mermaid
@@ -169,7 +169,7 @@ types: whole · first · middle · last   (a record may span blocks)
 
 - **Commit** appends records and calls `sync`. **Group commit** lets every writer waiting at that moment share one `sync`.
 - **Replay** reads from the last checkpoint and stops cleanly at a torn record at the end.
-- **Fuzzy checkpoints** note where replay can start, without stopping writers; the log before it is deleted.
+- **Fuzzy checkpoints** record where replay can start, without stopping writers. The log before that point is deleted.
 
 ## 5. The storage contract: `kv`
 
@@ -187,7 +187,7 @@ Three engines implement it: a `BTreeMap` model, the B-tree and the LSM tree. One
 
 ## 6. B-tree engine: `btree`
 
-A B+tree on slotted pages. Leaves hold keys and values, linked left to right for scans; interior nodes hold separator keys.
+A B+tree on slotted pages. Leaves hold keys and values, and are linked left to right for scans. Interior nodes hold separator keys.
 
 ```text
                  ┌───────────┐
@@ -200,7 +200,7 @@ A B+tree on slotted pages. Leaves hold keys and values, linked left to right for
                                        └──▶ overflow chain for a long value
 ```
 
-**A committed batch.** Pages change in frames; the log gets full images of every changed page, then a commit record.
+**A committed batch.** Pages change in frames. The log gets a full image of every changed page, then a commit record.
 
 ```mermaid
 sequenceDiagram
@@ -267,13 +267,13 @@ stateDiagram-v2
 table "acct"     IS / IX / S / X        intention locks on tables
   ├─ row 7          S / X                  row locks
   └─ range [5, 9)   S / X                  range locks (phantoms)
-waits form a wait-for graph; a cycle is a deadlock, and the youngest transaction aborts
+waits form a wait-for graph. A cycle is a deadlock, and the youngest transaction aborts
 ```
 
 | Isolation | How |
 |---|---|
-| snapshot | snapshot reads; each write X-locks its row; a row changed since the snapshot aborts the writer |
-| serializable (SSI) | snapshot, plus every key and range read is tracked; a dangerous read-write cycle aborts one transaction |
+| snapshot | reads use the snapshot. Each write X-locks its row. If the row changed since the snapshot, the writer aborts |
+| serializable (SSI) | snapshot, plus tracking every key and range read. A dangerous read-write cycle aborts one transaction |
 | `SELECT ... FOR UPDATE` | row and range locks, so others can neither change nor insert into what was read |
 
 - **Timestamps** come from a counter that's saved, so a restart never reuses one.
@@ -297,17 +297,17 @@ catalog      0 | "table" | name                →  schema
 no primary key?  a hidden row id is the key
 ```
 
-Keys are encoded so byte order equals value order, so ranges in SQL become range scans in `kv`.
+Keys are encoded so that byte order matches value order. That way a range in SQL becomes a range scan in `kv`.
 
 | Piece | What it does |
 |---|---|
 | types | INTEGER, REAL, TEXT, BLOB, NULL, SQLite's comparison rules, three-valued logic |
-| constraints | PRIMARY KEY, NOT NULL, UNIQUE; every index updated in the same transaction as its table |
-| schema locks | a statement IS/IX-locks its tables; DDL takes X, so DROP waits for running queries |
+| constraints | PRIMARY KEY, NOT NULL, UNIQUE. Every index is updated in the same transaction as its table |
+| schema locks | a statement takes IS or IX locks on its tables. DDL takes X, so DROP waits for running queries |
 | prepared statements | parse and plan once, bind `?` parameters, run many times |
 | operators | Volcano iterators: scan, index scan, filter, project, limit, aggregate, nested-loop, sort-merge and hash joins |
-| memory budget | external merge sort; hash joins and aggregates spill partitions to disk |
-| optimizer | rewrites (predicate pushdown), index choice, join order from `ANALYZE` statistics; `EXPLAIN` |
+| memory budget | external merge sort, and hash joins and aggregates that spill partitions to disk |
+| optimizer | rewrites (predicate pushdown), index choice, join order from `ANALYZE` statistics, and `EXPLAIN` |
 
 ## 10. Talking to clients: `wire`, `server`, `client`
 
@@ -325,7 +325,7 @@ sequenceDiagram
 ```
 
 - Frames are a type byte, a length and a body. Errors carry a code, so a client can tell "retry this" from "fix this".
-- One session per connection, its transaction state with it. A bounded thread pool refuses work it can't take.
+- One session per connection, holding that connection's transaction state. A bounded thread pool refuses work it can't take.
 - Idle and query timeouts, cancel, and a shutdown that rolls back open transactions and flushes.
 - The client library retries only what can't have committed. The REPL works like the `sqlite3` shell.
 
@@ -378,7 +378,7 @@ sequenceDiagram
 |---|---|---|
 | `pagefile` | a damaged page is never trusted | CRC-32C on every page |
 | `btree` | a batch survives whole or not at all | page images + commit record in `wal`, synced before the reply |
-| `lsm` | the same | batch in `wal` before the memtable; MANIFEST replaced atomically |
+| `lsm` | the same | batch in `wal` before the memtable, and the MANIFEST replaced atomically |
 | `mvcc` | a transaction commits whole or not at all | one atomic batch, or intents plus a transaction record |
 | `onyxdb` | one process owns the data | an exclusive lock on `data/LOCK` |
 
@@ -386,13 +386,13 @@ sequenceDiagram
 
 | Layer | Against |
 |---|---|
-| `vfs` | the real disk; a model of what may survive a crash |
-| `pagefile`, `bufpool` | in-memory models; flipped bits; crashes |
+| `vfs` | the real disk, and a model of what may survive a crash |
+| `pagefile`, `bufpool` | in-memory models, flipped bits and crashes |
 | `wal` | every acknowledged record after a crash at every write |
 | engines | the `kv` suite: the model, then a crash at every write |
 | `mvcc` | Hermitage, phantoms, deadlocks |
 | `sql` | `sqlite3`, row for row |
-| `wire` | random splits and garbage input; never a panic |
+| `wire` | random splits and garbage input, which must never cause a panic |
 | `onyxdb` | sqllogictest, `kill -9` under load, the integrity check |
 
 ## Not in scope
