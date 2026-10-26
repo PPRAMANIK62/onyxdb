@@ -2,7 +2,7 @@
 
 A SQL database written from scratch in Rust. It speaks a SQLite-like dialect of SQL, stores its data on disk with crash recovery, runs transactions with snapshot isolation, and serves many clients at once over its own wire protocol. Everything is built with the standard library only: the storage engines, the query language, the server and the client.
 
-It's built from papers. Each crate is one layer, designed after reading the papers, specs and design docs behind it, and taking the best ideas from each. The sources for every layer, and what I learned from them, are in [database-papers](https://github.com/PPRAMANIK62/database-papers): build N lives in its `N-<crate>/` folder there.
+Each crate is one layer, designed from references: the papers, specs and design docs behind it, taking the best ideas from each. The references for every layer, and what I learned from them, are in [database-papers](https://github.com/PPRAMANIK62/database-papers), in the `N-<crate>/` folder for build N.
 
 ## Crates
 
