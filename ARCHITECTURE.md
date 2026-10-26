@@ -24,7 +24,7 @@ How the crates fit together. Each crate's README has its own design. This file i
       pagefile    wal       pages on disk; the log both engines use
 ```
 
-`sqldb` sits on top of all of them. It is the binary that reads the config, opens the data directory, picks the engine and starts the server.
+`onyxdb` sits on top of all of them. It is the binary that reads the config, opens the data directory, picks the engine and starts the server.
 
 ## Who owns what
 
@@ -41,7 +41,7 @@ How the crates fit together. Each crate's README has its own design. This file i
 | `wire` | the byte format of every message between client and server | nothing |
 | `server` | listening, sessions, one transaction per session at a time, login, shutdown | `sql`, `wire` |
 | `client` | connecting, sending queries, reading rows, the REPL | `wire` |
-| `sqldb` | the binary and the end-to-end checks | all of the above |
+| `onyxdb` | the binary and the end-to-end checks | all of the above |
 
 ## The life of a query
 
@@ -67,4 +67,4 @@ The places where one layer can be swapped without the others noticing:
 - Every engine runs the `kv` test suite: random operations compared with an in-memory model, then crashes at every write.
 - `mvcc` runs the Hermitage isolation tests.
 - `sql` compares query results with `sqlite3` row for row.
-- `sqldb` runs a slice of SQLite's sqllogictest, survives `kill -9` mid-write, and serves many clients at once.
+- `onyxdb` runs a slice of SQLite's sqllogictest, survives `kill -9` mid-write, and serves many clients at once.
