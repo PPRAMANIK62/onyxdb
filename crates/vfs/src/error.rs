@@ -46,6 +46,8 @@ pub enum Error {
         /// The file's length, in bytes.
         file_len: u64,
     },
+    /// The file handle was opened before a crash, so it no longer works.
+    Stale(PathBuf),
 }
 
 /// What every function in this crate returns.
@@ -96,6 +98,11 @@ impl fmt::Display for Error {
             } => write!(
                 f,
                 "read {}: {len} bytes at {offset} runs past the end of the file, which is {file_len} bytes",
+                path.display()
+            ),
+            Error::Stale(path) => write!(
+                f,
+                "{}: this handle was opened before a crash",
                 path.display()
             ),
         }

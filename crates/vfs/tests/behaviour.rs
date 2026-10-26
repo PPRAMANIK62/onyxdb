@@ -5,7 +5,7 @@ mod common;
 use std::path::Path;
 
 use common::TempDir;
-use vfs::{Disk, Error, Open, Vfs};
+use vfs::{Disk, Error, Mem, Open, Vfs};
 
 /// Runs through what a file system must do, starting from an empty one.
 fn behaves_like_a_file_system(vfs: &dyn Vfs) {
@@ -91,4 +91,9 @@ fn behaves_like_a_file_system(vfs: &dyn Vfs) {
 fn on_disk() {
     let dir = TempDir::new("behavior");
     behaves_like_a_file_system(&Disk::new(dir.path()));
+}
+
+#[test]
+fn in_memory() {
+    behaves_like_a_file_system(&Mem::new());
 }

@@ -6,7 +6,11 @@
 pub mod disk;
 mod error;
 pub mod file;
+pub mod mem;
+pub mod rng;
 
 pub use disk::Disk;
 pub use error::{Error, Result};
 pub use file::{File, Open, Vfs};
+pub use mem::Mem;
+pub use rng::Rng;
