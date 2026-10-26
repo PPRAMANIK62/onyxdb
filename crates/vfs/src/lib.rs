@@ -3,6 +3,7 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod crash;
 pub mod disk;
 mod error;
 pub mod file;

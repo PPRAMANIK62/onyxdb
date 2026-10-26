@@ -48,6 +48,9 @@ pub enum Error {
     },
     /// The file handle was opened before a crash, so it no longer works.
     Stale(PathBuf),
+    /// The power is off. `Mem::power_off_after` set how many changes could
+    /// happen, and they're used up. Every change fails until `Mem::crash`.
+    PowerOff,
 }
 
 /// What every function in this crate returns.
@@ -105,6 +108,7 @@ impl fmt::Display for Error {
                 "{}: this handle was opened before a crash",
                 path.display()
             ),
+            Error::PowerOff => write!(f, "the power is off"),
         }
     }
 }
