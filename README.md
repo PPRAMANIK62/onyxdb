@@ -1,8 +1,8 @@
 # onyxdb
 
-A SQL database written from scratch in Rust. It speaks a SQLite-like dialect of SQL, stores its data on disk with crash recovery, runs transactions with snapshot isolation, and serves many clients at once over its own wire protocol. Everything is built with the standard library only: the storage engines, the query language, the server and the client.
+A SQL database written from scratch in Rust, standard library only. SQLite-like SQL, crash-safe storage, transactions, and many clients over its own protocol.
 
-Each crate is one layer, designed from references: the papers, specs and design docs behind it, taking the best ideas from each. The references for every layer, and what I learned from them, are in [database-papers](https://github.com/PPRAMANIK62/database-papers), in the `N-<crate>/` folder for build N.
+The references behind each layer are in [database-papers](https://github.com/PPRAMANIK62/database-papers).
 
 ## Crates
 
