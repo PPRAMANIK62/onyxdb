@@ -2,7 +2,7 @@
 
 File I/O behind a trait, so a database can run on the real disk or on a file system in memory that loses power on command.
 
-Every crate in onyxdb that keeps data in files goes through this one: `pagefile`, `wal` and `lsm`, and through them everything else. That gives one place to swap the real disk for a simulated one, and the simulated one can lose power at any moment, keep some unsynced writes and not others, and fail an `fsync`. Every layer above can then be tested against every crash it could meet, from a seed.
+Every crate in onyxdb that keeps data in files goes through this one: `pagefile`, `wal` and `lsm`, and through them everything else. That gives one place to swap the real disk for a simulated one. The simulated one can lose power at any moment, keep some unsynced writes and lose others, and fail an `fsync`. So every layer above can be tested against every crash it could meet, and each crash can be replayed from its seed.
 
 ## Status
 
@@ -11,9 +11,9 @@ Every crate in onyxdb that keeps data in files goes through this one: `pagefile`
 | `Vfs` and `File` traits, `Open` | done |
 | `Error`, with the operation and the path | done |
 | `Disk`: the real file system, with an exclusive file lock | done |
-| Behaviour tests on `Disk` | done |
-| `Mem`: a file system in memory | not yet |
-| `Rng`: the seeded random number generator | not yet |
+| `Mem`: a file system in memory | done |
+| `Rng`: the seeded random number generator | done |
+| Behaviour tests on `Disk` and `Mem`, and random operations that must agree on both | done |
 | `Mem::crash`: what a power failure keeps | not yet |
 | Faults: failed writes, short writes, failed syncs | not yet |
 | `crash_test`: crash a workload after every change | not yet |
@@ -46,7 +46,7 @@ assert!(matches!(other.try_lock(), Err(vfs::Error::Locked(_))));
 std::fs::remove_dir_all(&root).unwrap();
 ```
 
-Once `Mem` is built, a crash test looks like this:
+Once crashes are built, a crash test looks like this:
 
 ```rust,ignore
 use std::path::Path;
@@ -103,14 +103,39 @@ What `Mem::crash(seed)` keeps:
 
 | What | Survives a crash when |
 |---|---|
-| File bytes | Synced bytes always survive. Each later write is cut into 512-byte sectors, and each sector, chosen from the seed, is kept, lost, or torn: new bytes from one end up to some point, old bytes after. |
+| File bytes | Synced bytes always survive. Each later write is cut into 512-byte sectors. The seed decides each sector: kept, lost, or torn (new bytes from one end up to some point, old bytes after). |
 | File length | A `set_len` after the last `sync` is kept or lost. |
 | Names in a directory | Changes after the directory's last `sync_dir` survive as a prefix: the first *k*, in order. A rename is one change. |
-| After a failed `sync` | The writes it was meant to save are gone for good, though reads still return them until the crash. |
+| After a failed `sync` | Its writes are lost. Reads still return them until the crash. |
 | Locks | All released: the process that held them is gone. |
 | Old handles | Every call returns `Error::Stale`. |
 
-Linear sectors are SQLite's assumption, and in-order name changes are how ext4's journal behaves. A file system that breaks either breaks the databases on it too.
+Sectors written from one end to the other is SQLite's assumption. Name changes kept in order is how ext4's journal behaves. A file system that breaks either rule breaks the databases on it too.
+
+## Shared state
+
+`Mem` and every file it opens must see the same bytes, and `write_at` changes them through `&self`. Rust allows one owner and one `&mut` at a time, so we need these tools to share the state:
+
+| Tool | What it does |
+|---|---|
+| `Rc<T>` | Several owners of one value. It counts them, and frees the value when the last one goes. One thread only. |
+| `Arc<T>` | `Rc` with an atomic count, so it's safe across threads. |
+| `RefCell<T>` | Changes a value through `&`, with the borrow rules checked at run time. One thread only. |
+| `Mutex<T>` | Changes a value through `&`, from any thread. `lock()` waits its turn, and the lock is released when the guard is dropped. |
+| `RwLock<T>` | Like `Mutex`, but many readers or one writer. |
+
+`Arc` lets many owners share a value, but not change it. `Mutex` lets you change it, but not share it. `Mem` uses both:
+
+```text
+Mem { state: Arc<Mutex<State>> }      State: every directory, file, unsynced change and fault
+MemFile { mem: Mem, path, .. }        a clone of the same Arc
+```
+
+A clone of `Mem` is another handle to the same file system. `Disk` needs none of this: the operating system already shares the real files.
+
+A `Mutex` keeps threads in one process apart. `File::try_lock` is a different thing: a file lock (`flock`) that keeps processes apart.
+
+Read more in the Rust book: [Rc](https://doc.rust-lang.org/book/ch15-04-rc.html), [RefCell](https://doc.rust-lang.org/book/ch15-05-interior-mutability.html), and [Mutex and Arc](https://doc.rust-lang.org/book/ch16-03-shared-state.html).
 
 ## Decisions
 
@@ -135,6 +160,9 @@ Linear sectors are SQLite's assumption, and in-order name changes are how ext4's
 - **One exclusive lock, never waiting.**
   Why: onyxdb lets one process own a database. `try_lock` is `flock` on `Disk`, released when the handle closes or the process dies.
   Cost: no shared locks, and no waiting for a lock to free up.
+- **One `Arc<Mutex<State>>` for all of `Mem`.**
+  Why: `Vfs` and `File` are `Send + Sync`, so `Mem` must work across threads. One lock is the simplest way, and a crash always sees the whole state at once.
+  Cost: every call on every file waits for the same lock. If a thread panics while holding it, the lock is still taken, because a test still wants to read the state.
 - **Seeded, deterministic crashes.**
   Why: a failing crash test names its change count and seed, and those two numbers bring the same failure back.
   Cost: the model has to be written down exactly; it can't just be "whatever the disk does".
@@ -149,7 +177,7 @@ Memory-mapped files, shared or waiting locks, Windows, and asynchronous I/O.
 cargo test -p vfs
 ```
 
-`tests/behaviour.rs` runs one walk through everything a file system must do against any `Vfs`: create, write past the end, refuse reads past the end, open with each mode, directories, rename over a file, remove an open file, lock against a second handle, and refuse bad paths. It runs on `Disk` today, and on `Mem` once it exists. Later tests compare random operations on both, and check the crash model, the faults and `crash_test`.
+`tests/behaviour.rs` runs one walk through everything a file system must do against any `Vfs`: create, write past the end, refuse reads past the end, open with each mode, directories, rename over a file, remove an open file, lock against a second handle, and refuse bad paths. It runs on both `Disk` and `Mem`. `tests/agree.rs` runs random operations on both and checks that every result matches. Later tests check the crash model, the faults and `crash_test`.
 
 ## Learn more
 
