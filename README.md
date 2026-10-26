@@ -10,19 +10,19 @@ Each crate has a README with its design, its format and the decisions behind it.
 
 | Build | Crate | What it is | State |
 |---|---|---|---|
-| 1 | `vfs` | file I/O behind a trait, with crashes and failed `fsync`s you can inject | planned |
+| 1 | `vfs` | file I/O behind a trait: a real disk, and one in memory that crashes, tears writes and fails `fsync`; file locks | planned |
 | 2 | [`pagefile`](crates/pagefile) | a file of fixed-size, checksummed pages | in progress |
-| 3 | `bufpool` | a buffer pool that keeps hot pages in memory | planned |
-| 4 | `wal` | a write-ahead log and crash recovery | planned |
+| 3 | `bufpool` | a buffer pool: frames, eviction, the write-ahead rule, latches | planned |
+| 4 | `wal` | a write-ahead log: group commit, replay, checkpoints | planned |
 | 5 | `kv` | the ordered key-value trait, an in-memory model engine and a shared test suite | planned |
-| 6 | `mvcc` | transactions: snapshots, serializable checks, locks and deadlocks | planned |
-| 7 | `sql` | parser, catalog, planner and executor, within a memory budget | planned |
+| 6 | `mvcc` | transactions: snapshots, a lock manager, deadlocks, serializable isolation with phantoms | planned |
+| 7 | `sql` | parser, catalog, schema locks, prepared statements, planner and executor | planned |
 | 8 | `wire` | the client-server protocol | planned |
 | 9 | `server` | sessions over TCP, many clients at once | planned |
 | 10 | `client` | a client library and a REPL | planned |
-| 11 | `btree` | a B+tree engine | planned |
+| 11 | `btree` | a B+tree engine, crash-safe through page images in the log | planned |
 | 12 | `lsm` | a log-structured merge tree engine | planned |
-| 13 | `onyxdb` | the database binary, wiring every layer together | planned |
+| 13 | `onyxdb` | the binary: owns the data directory, recovers, serves; integrity check and backup | planned |
 
 By build 10 the whole stack runs on the in-memory model engine. Builds 11 and 12 put real engines underneath.
 
