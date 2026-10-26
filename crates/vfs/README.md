@@ -4,20 +4,6 @@ File I/O behind a trait, so a database can run on the real disk or on a file sys
 
 Every crate in onyxdb that keeps data in files goes through this one: `pagefile`, `wal` and `lsm`, and through them everything else. That gives one place to swap the real disk for a simulated one. The simulated one can lose power at any moment, keep some unsynced writes and lose others, and fail an `fsync`. So every layer above can be tested against every crash it could meet, and each crash can be replayed from its seed.
 
-## Status
-
-| Part | State |
-|---|---|
-| `Vfs` and `File` traits, `Open` | done |
-| `Error`, with the operation and the path | done |
-| `Disk`: the real file system, with an exclusive file lock | done |
-| `Mem`: a file system in memory | done |
-| `Rng`: the seeded random number generator | done |
-| Behaviour tests on `Disk` and `Mem`, and random operations that must agree on both | done |
-| `Mem::crash`: what a power failure keeps | not yet |
-| Faults: failed writes, short writes, failed syncs | not yet |
-| `crash_test`: crash a workload after every change | not yet |
-
 ## Use
 
 ```rust
