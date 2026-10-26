@@ -150,3 +150,45 @@ fn the_power_goes_off_after_n_changes() {
         .or_else(|_| mem.open(Path::new("f"), Open::Existing));
     file.unwrap().write_at(b"back on", 0).unwrap();
 }
+
+/// Replaces the file `config` with `contents`: write a temporary file, sync
+/// it, rename it over `config`, and, when `sync_dir` is true, sync the directory.
+fn replace(vfs: &dyn Vfs, contents: &[u8], sync_dir: bool) -> vfs::Result<()> {
+    let tmp = vfs.open(Path::new("config.tmp"), Open::CreateNew)?;
+    tmp.write_at(contents, 0)?;
+    tmp.sync()?;
+    vfs.rename(Path::new("config.tmp"), Path::new("config"))?;
+    if sync_dir {
+        vfs.sync_dir(Path::new(""))?;
+    }
+    Ok(())
+}
+
+/// What `config` holds after a crash, or `None` if it's gone.
+fn config_after_crash(sync_dir: bool, seed: u64) -> Option<Vec<u8>> {
+    let mem = Mem::new();
+    replace(&mem, b"version 1", true).unwrap();
+    replace(&mem, b"version 2", sync_dir).unwrap();
+    mem.crash(seed);
+    mem.exists(Path::new("config"))
+        .unwrap()
+        .then(|| read_all(&mem, "config"))
+}
+
+#[test]
+fn a_replace_survives_only_with_sync_dir() {
+    let lost = (0..300)
+        .filter(|&seed| config_after_crash(false, seed).as_deref() != Some(b"version 2"))
+        .count();
+    assert!(
+        lost > 0,
+        "without sync_dir, some crash should lose version 2"
+    );
+    for seed in 0..300 {
+        assert_eq!(
+            config_after_crash(true, seed).as_deref(),
+            Some(&b"version 2"[..]),
+            "seed {seed}"
+        );
+    }
+}
