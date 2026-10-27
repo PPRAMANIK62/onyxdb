@@ -1,15 +1,15 @@
 //! Pages, page numbers and page kinds.
 //!
 //! A page file is cut into pages of one size. Page 0 holds the header (see
-//! `header`). Every other page starts with a kind byte that says what the
-//! page holds. Every page, page 0 included, ends with a 4-byte checksum
-//! (see `crc`).
+//! `header`). Every other page starts with a kind byte that says what the page
+//! holds, then an 8-byte log sequence number (LSN) for the code above this
+//! crate. Every page, page 0 included, ends with a 4-byte checksum (see `crc`).
 //!
 //! ```text
-//! byte 0      1                                   size - 4       size
-//!      +------+---------------------------------------+-----------+
-//!      | kind |      laid out by the page's kind      |  CRC-32C  |
-//!      +------+---------------------------------------+-----------+
+//! byte 0      1          9                             size - 4    size
+//!      +------+----------+-----------------------------+-----------+
+//!      | kind | LSN      | laid out by the page's kind | CRC-32C   |
+//!      +------+----------+-----------------------------+-----------+
 //! ```
 
 use std::{fmt, num::NonZeroU32};
@@ -22,6 +22,12 @@ pub const MIN_PAGE_SIZE: usize = 512;
 /// The largest page size, in bytes. Offsets inside a page are stored as `u16`,
 /// which can't hold 65536, so the largest power of two that fits is 32768.
 pub const MAX_PAGE_SIZE: usize = 32768;
+
+/// 1: the page's log sequence number, a little-endian `u64`.
+pub const LSN: usize = 1;
+
+/// 9: where each kind's own layout starts, after the kind byte and the LSN.
+pub const BODY: usize = 9;
 
 /// Bytes at the end of every page that hold its checksum.
 pub const CHECKSUM_LEN: usize = 4;
@@ -138,10 +144,23 @@ impl Page {
         PageKind::from_byte(self.bytes[0])
     }
 
-    /// Sets every byte to zero, then sets the kind byte.
+    /// Sets the kind byte and every byte after the LSN to zero. The LSN stays,
+    /// because a page's LSN only ever moves forward.
     pub fn reset(&mut self, kind: PageKind) {
         self.bytes.fill(0);
         self.bytes[0] = kind as u8;
+    }
+
+    /// The page's log sequence number: the position in the log of the last
+    /// change to this page. The log belongs to the code above this crate.
+    /// 0 means no logged change. This crate stores it and never reads it.
+    pub fn lsn(&self) -> u64 {
+        self.u64_at(LSN)
+    }
+
+    /// Sets the page's log sequence number.
+    pub fn set_lsn(&mut self, lsn: u64) {
+        self.put_u64(LSN, lsn);
     }
 
     /// Reads the little-endian `u16` at byte `at`.
@@ -164,6 +183,18 @@ impl Page {
     /// Writes `value` as a little-endian u32 at byte `at`.
     pub fn put_u32(&mut self, at: usize, value: u32) {
         self.bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    /// Reads the little-endian u64 at byte `at`.
+    pub fn u64_at(&self, at: usize) -> u64 {
+        let mut b = [0; 8];
+        b.copy_from_slice(&self.bytes[at..at + 8]);
+        u64::from_le_bytes(b)
+    }
+
+    /// Writes `value` as a little-endian u64 at byte `at`.
+    pub fn put_u64(&mut self, at: usize, value: u64) {
+        self.bytes[at..at + 8].copy_from_slice(&value.to_le_bytes());
     }
 
     /// The bytes a page's format can use: everything before the checksum.
