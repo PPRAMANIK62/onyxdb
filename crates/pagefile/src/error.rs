@@ -3,7 +3,9 @@
 //! Each variant names the rule that broke and carries the numbers involved,
 //! and `fmt` turns it into a message that says both.
 
-use std::{error, fmt, io, result};
+use std::{error, fmt, result};
+
+use vfs::{self};
 
 /// Everything that can go wrong opening or using a page file.
 #[derive(Debug)]
@@ -14,8 +16,9 @@ pub enum Error {
     NotAPageFile,
     /// The header's format version is unknown.
     UnsupportedVersion(u16),
-    /// The operating system failed a read or a write.
-    Io(io::Error),
+    /// A file operation failed: the file system refused, or a simulated one
+    /// lost power or injected a fault.
+    Vfs(vfs::Error),
     /// The file is shorter than its header says it should be.
     Truncated {
         /// The file's length, in bytes.
@@ -62,7 +65,7 @@ impl fmt::Display for Error {
                     "format version {v} is not supported (this code reads version 1)"
                 )
             }
-            Error::Io(e) => write!(f, "{e}"),
+            Error::Vfs(e) => write!(f, "{e}"),
             Error::Truncated { len, expected } => {
                 write!(
                     f,
@@ -91,9 +94,9 @@ impl fmt::Display for Error {
 
 impl error::Error for Error {}
 
-// `?` on an I/O call turns the `io::Error` into an `Error` through this.
-impl From<io::Error> for Error {
-    fn from(value: io::Error) -> Self {
-        Error::Io(value)
+// `?` on a file operation turns the `vfs::Error` into an `Error` through this.
+impl From<vfs::Error> for Error {
+    fn from(value: vfs::Error) -> Self {
+        Error::Vfs(value)
     }
 }

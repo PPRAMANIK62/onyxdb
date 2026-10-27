@@ -1,8 +1,8 @@
 //! `PageFile`: a page file on disk.
 //!
-//! It creates or opens the file, reads and writes whole pages at
-//! `page number x page size`, checks every page's checksum, and keeps the
-//! header in page 0 up to date as pages are allocated and freed.
+//! It creates or opens the file through a `vfs::Vfs`, reads and writes whole
+//! pages at `page number x page size`, checks every page's checksum, and keeps
+//! a copy of the header in page 0 in memory.
 //!
 //! Freed pages form the freelist: a chain of free pages, each holding the number of the next one, starting from the header.
 //!
@@ -13,11 +13,9 @@
 //!             +-------+------------------+----------------------+----------+
 //! ```
 
-use std::{
-    fs::{File, OpenOptions},
-    os::unix::fs::FileExt,
-    path::Path,
-};
+use std::path::Path;
+
+use vfs::{File, Open, Vfs};
 
 use crate::{
     Error, Header, Page, PageNo, Result,
@@ -28,7 +26,7 @@ use crate::{
 
 /// An open page file.
 pub struct PageFile {
-    file: File,
+    file: Box<dyn File>,
     header: Header,
 }
 
@@ -40,18 +38,19 @@ impl PageFile {
 
     /// Reads page `n` into `page`. No range or checksum check.
     fn read_raw(&self, n: u32, page: &mut Page) -> Result<()> {
-        self.file.read_exact_at(page.bytes_mut(), self.offset(n))?;
+        self.file.read_at(page.bytes_mut(), self.offset(n))?;
         Ok(())
     }
 
-    /// Writes a `page` as page `n`. No range check, and the checksum is written as it is.
+    /// Writes a `page` as page `n`. No range check, and the checksum is written
+    /// as it is.
     fn write_raw(&self, n: u32, page: &Page) -> Result<()> {
-        self.file.write_all_at(page.bytes(), self.offset(n))?;
+        self.file.write_at(page.bytes(), self.offset(n))?;
         Ok(())
     }
 
     /// Writes the header into page 0.
-    fn write_header(&self) -> Result<()> {
+    fn save_header(&self) -> Result<()> {
         let mut page = Page::new(self.header.page_size as usize);
         self.header.encode(&mut page);
         page.seal();
@@ -86,43 +85,43 @@ impl PageFile {
 
     /// The file's length on disk, in bytes.
     pub fn file_len(&self) -> Result<u64> {
-        Ok(self.file.metadata()?.len())
+        Ok(self.file.len()?)
     }
 
     /// Replaces the header's user bytes and writes the header.
     pub fn set_user(&mut self, user: [u8; USER_LEN]) -> Result<()> {
         self.header.user = user;
-        self.write_header()
+        self.save_header()
     }
 
-    /// Creates a page file at `path` that holds only the header page. Fails
-    /// if the file is already there.
-    pub fn create(path: impl AsRef<Path>, page_size: u32) -> Result<PageFile> {
+    /// Creates a page file at `path` in `vfs` that holds only the header
+    /// page, and makes it durable: the file and its name are both synced.
+    /// Fails if a file is already there.
+    pub fn create(vfs: &dyn Vfs, path: impl AsRef<Path>, page_size: u32) -> Result<PageFile> {
         let size = check_page_size(page_size)?;
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .open(path)?;
+        let path = path.as_ref();
+        let file = vfs.open(path, Open::CreateNew)?;
         let file = PageFile {
             file,
             header: Header::new(size),
         };
-        file.write_header()?;
+        file.save_header()?;
+        file.sync()?;
+        vfs.sync_dir(path.parent().unwrap_or(Path::new("")))?;
         Ok(file)
     }
 
-    /// Opens an existing page file and checks its header.
-    pub fn open(path: impl AsRef<Path>) -> Result<PageFile> {
-        let file = OpenOptions::new().read(true).write(true).open(path)?;
-        let len = file.metadata()?.len();
+    /// Opens an existing page file at `path` in `vfs` and checks its header.
+    pub fn open(vfs: &dyn Vfs, path: impl AsRef<Path>) -> Result<PageFile> {
+        let file = vfs.open(path.as_ref(), Open::Existing)?;
+        let len = file.len()?;
         if len < PREFIX_LEN as u64 {
             return Err(Error::NotAPageFile);
         }
         // The page size is stored inside page 0, so read just enough of page 0
         // to learn it before reading the whole page.
         let mut prefix = [0; PREFIX_LEN];
-        file.read_exact_at(&mut prefix, 0)?;
+        file.read_at(&mut prefix, 0)?;
         let size = page_size_from_prefix(&prefix)?;
         if len < size as u64 {
             return Err(Error::Truncated {
@@ -131,7 +130,7 @@ impl PageFile {
             });
         }
         let mut page = Page::new(size);
-        file.read_exact_at(page.bytes_mut(), 0)?;
+        file.read_at(page.bytes_mut(), 0)?;
         page.verify(0)?;
         let header = Header::decode(&page)?;
         let expected = header.page_count as u64 * size as u64;
@@ -143,7 +142,7 @@ impl PageFile {
 
     /// Waits until the operating system has put every write so far on the disk.
     pub fn sync(&self) -> Result<()> {
-        self.file.sync_all()?;
+        self.file.sync()?;
         Ok(())
     }
 }
@@ -151,6 +150,15 @@ impl PageFile {
 impl PageStore for PageFile {
     fn page_size(&self) -> usize {
         self.header.page_size as usize
+    }
+
+    fn read_header(&self) -> Result<Header> {
+        Ok(self.header.clone())
+    }
+
+    fn write_header(&mut self, header: &Header) -> Result<()> {
+        self.header = header.clone();
+        self.save_header()
     }
 
     fn read(&self, n: PageNo, page: &mut Page) -> Result<()> {
@@ -163,13 +171,5 @@ impl PageStore for PageFile {
         self.check(n, page)?;
         page.seal();
         self.write_raw(n.get(), page)
-    }
-
-    fn allocate(&mut self) -> Result<PageNo> {
-        todo!()
-    }
-
-    fn free(&mut self, n: PageNo) -> Result<()> {
-        todo!()
     }
 }
