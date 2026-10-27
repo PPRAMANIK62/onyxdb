@@ -2,7 +2,7 @@
 
 A file of fixed-size, numbered pages.
 
-The file is cut into pages of one size. Page 0 is a header that says what the file is. Every other page holds one kind of thing, named by its first byte. Every page ends with a checksum, so a damaged page is caught when it's read.
+The file is cut into pages of one size. Page 0 is a header that says what the file is. Every other page holds one kind of thing, named by its first byte, followed by the page's log sequence number (LSN). Every page ends with a checksum, so a damaged page is caught when it's read. All file I/O goes through [`vfs`](../vfs), so the tests run on a file system in memory.
 
 This is the bottom layer of the database. Everything stored on disk in pages goes through it.
 
@@ -10,33 +10,32 @@ This is the bottom layer of the database. Everything stored on disk in pages goe
 
 | Part | State |
 |---|---|
-| Pages, page numbers and page kinds | done |
+| Pages, page numbers, page kinds and the page LSN | done |
 | The header in page 0 | done |
 | CRC-32C checksum on every page | done |
-| Create, open, read and write pages | done |
-| Tests for damaged and foreign files | done |
-| Allocating and freeing pages (the freelist) | not yet: `allocate` and `free` are `todo!()` |
+| Create, open, read and write pages through `vfs` | done |
+| Tests for damaged, torn and foreign files | done |
 | Slotted pages | not yet |
+| Allocating and freeing pages (the freelist) | not yet |
 | Overflow chains | not yet |
+| Model and fuzz tests over the whole file | not yet |
 
 ## Use
 
 ```rust
 use pagefile::{PageFile, PageStore};
+use vfs::Mem;
 
-let path = std::env::temp_dir().join(format!("pagefile-readme-{}", std::process::id()));
-let _ = std::fs::remove_file(&path);
+let mem = Mem::new();
 
-let mut file = PageFile::create(&path, 4096).unwrap();
+let mut file = PageFile::create(&mem, "db.pf", 4096).unwrap();
 file.set_user([7; 32]).unwrap();
 drop(file);
 
-let file = PageFile::open(&path).unwrap();
+let file = PageFile::open(&mem, "db.pf").unwrap();
 assert_eq!(file.page_size(), 4096);
 assert_eq!(file.page_count(), 1);
 assert_eq!(file.header().user, [7; 32]);
-
-std::fs::remove_file(&path).unwrap();
 ```
 
 ## Modules
@@ -44,19 +43,19 @@ std::fs::remove_file(&path).unwrap();
 - `page`: page numbers, page kinds and the bytes of one page.
 - `header`: the header in page 0.
 - `crc`: the CRC-32C checksum.
-- `store`: the `PageStore` trait for reading, writing, allocating and freeing pages.
-- `file`: `PageFile`, a page file on disk that implements `PageStore`.
+- `store`: the `PageStore` trait for reading and writing pages and the header.
+- `file`: `PageFile`, a page file opened through a `vfs::Vfs`, that implements `PageStore`.
 
 ## Format
 
 Every number is little-endian.
 
 ```text
-every page
-byte 0      1                                   size - 4       size
-     +------+---------------------------------------+-----------+
-     | kind |      laid out by the page's kind      |  CRC-32C  |
-     +------+---------------------------------------+-----------+
+every page except page 0
+byte 0      1          9                             size - 4    size
+     +------+----------+-----------------------------+-----------+
+     | kind | LSN      | laid out by the page's kind | CRC-32C   |
+     +------+----------+-----------------------------+-----------+
 
 page 0, the header (no kind byte)
 offset  size  field
@@ -91,6 +90,9 @@ page kinds
 - **A CRC-32C in the last 4 bytes of every page, the header included.**
   Why: it catches flipped bits and torn writes on every read. CRC-32C is the checksum ext4 and InnoDB use, and many CPUs have an instruction for it.
   Cost: 4 bytes per page. It can't catch a lost write, because the old page still has a valid checksum.
+- **An 8-byte LSN after the kind byte of every page except page 0.**
+  Why: the log above this crate needs to know which change each page last saw. This crate stores the number and never reads it.
+  Cost: 8 bytes per page.
 - **The checksum is a 256-entry table built at compile time, not the CPU instruction.**
   Why: std only, and one portable version that's easy to check.
   Cost: slower than the hardware instruction.
@@ -100,9 +102,15 @@ page kinds
 - **`sync` is a separate call, never automatic.**
   Why: deciding when data must be on disk belongs to the layer above, which knows what a commit is.
   Cost: a caller that forgets `sync` can lose writes on a crash.
-- **Reads and writes use positioned I/O (`read_exact_at`, `write_all_at`).**
+- **All file I/O goes through `vfs`.** `create` and `open` take a `&dyn Vfs`, and `PageFile` holds a `Box<dyn vfs::File>`.
+  Why: the tests run on `vfs::Mem`, which can tear a write or cut the power, so damage and crash cases are easy to test.
+  Cost: one more crate below this one, and a `&dyn Vfs` in every call that opens a file.
+- **`create` syncs the file and its directory before it returns.**
+  Why: without the directory sync, a crash right after `create` can lose the file's name.
+  Cost: two `fsync` calls on every create.
+- **Reads and writes use positioned I/O (`read_at`, `write_at`).**
   Why: no seek-then-read, so a read needs only `&self`.
-  Cost: Unix only, through `std::os::unix::fs::FileExt`.
+  Cost: none so far.
 - **`PageStore` is a trait, and `PageFile` is one implementation.**
   Why: a page cache can implement the same trait and stand in for the file.
   Cost: one trait to keep stable.
@@ -115,6 +123,8 @@ page kinds
 - Changes to several pages aren't atomic. A crash between two writes leaves some old pages and some new ones.
 - A lost write goes unnoticed, as described under the checksum decision.
 - Every read goes to the disk. Nothing is cached.
+- There is no way yet to add pages to a file. Allocation and the freelist aren't written.
+- `Page::reset` zeroes the LSN too, though its doc comment says the LSN stays.
 
 ## Tests
 
@@ -122,7 +132,7 @@ page kinds
 cargo test -p pagefile
 ```
 
-The unit tests check page sizes, page numbers and the CRC check value. `tests/corrupt.rs` refuses foreign and cut-short files, catches a torn write, and catches every single-bit flip in a page.
+The unit tests check page sizes, page numbers and the CRC check value. `tests/corrupt.rs` runs on `vfs::Mem`. It refuses foreign and cut-short files, catches a torn header, and catches every single-bit flip in a page.
 
 ## Learn more
 
