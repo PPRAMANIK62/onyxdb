@@ -15,7 +15,7 @@ This is the bottom layer of the database. Everything stored on disk in pages goe
 | CRC-32C checksum on every page | done |
 | Create, open, read and write pages through `vfs` | done |
 | Tests for damaged, torn and foreign files | done |
-| Slotted pages | not yet |
+| Slotted pages | implemented; tests pending |
 | Allocating and freeing pages (the freelist) | not yet |
 | Overflow chains | not yet |
 | Model and fuzz tests over the whole file | not yet |
@@ -45,6 +45,7 @@ assert_eq!(file.header().user, [7; 32]);
 - `crc`: the CRC-32C checksum.
 - `store`: the `PageStore` trait for reading and writing pages and the header.
 - `file`: `PageFile`, a page file opened through a `vfs::Vfs`, that implements `PageStore`.
+- `slotted`: variable-size items with insertion, removal, replacement and compaction.
 
 ## Format
 
@@ -124,7 +125,7 @@ page kinds
 - A lost write goes unnoticed, as described under the checksum decision.
 - Every read goes to the disk. Nothing is cached.
 - There is no way yet to add pages to a file. Allocation and the freelist aren't written.
-- `Page::reset` zeroes the LSN too, though its doc comment says the LSN stays.
+- Slotted pages do not have dedicated tests yet.
 
 ## Tests
 

@@ -147,8 +147,10 @@ impl Page {
     /// Sets the kind byte and every byte after the LSN to zero. The LSN stays,
     /// because a page's LSN only ever moves forward.
     pub fn reset(&mut self, kind: PageKind) {
+        let lsn = self.lsn();
         self.bytes.fill(0);
         self.bytes[0] = kind as u8;
+        self.set_lsn(lsn);
     }
 
     /// The page's log sequence number: the position in the log of the last

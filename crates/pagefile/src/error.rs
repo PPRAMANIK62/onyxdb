@@ -42,6 +42,15 @@ pub enum Error {
         /// The number of pages in the file.
         count: u32,
     },
+    /// A slotted page whose header or slots don't add up.
+    BadSlottedPage(String),
+    /// An item doesn't fit in a slotted page, even after compaction.
+    PageFull {
+        /// Bytes the item needs, its slot included.
+        need: usize,
+        /// Bytes the page has free, garbage included.
+        room: usize,
+    },
 }
 
 /// What every function in this crate returns.
@@ -86,6 +95,13 @@ impl fmt::Display for Error {
                 write!(
                     f,
                     "page {page} is past the end of the file, which has {count} pages"
+                )
+            }
+            Error::BadSlottedPage(why) => write!(f, "bad slotted page: {why}"),
+            Error::PageFull { need, room } => {
+                write!(
+                    f,
+                    "the item needs {need} bytes, but the page has {room} free"
                 )
             }
         }
