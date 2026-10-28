@@ -15,7 +15,7 @@ This is the bottom layer of the database. Everything stored on disk in pages goe
 | CRC-32C checksum on every page | done |
 | Create, open, read and write pages through `vfs` | done |
 | Tests for damaged, torn and foreign files | done |
-| Slotted pages | implemented; tests pending |
+| Slotted pages | done |
 | Allocating and freeing pages (the freelist) | not yet |
 | Overflow chains | not yet |
 | Model and fuzz tests over the whole file | not yet |
@@ -125,7 +125,6 @@ page kinds
 - A lost write goes unnoticed, as described under the checksum decision.
 - Every read goes to the disk. Nothing is cached.
 - There is no way yet to add pages to a file. Allocation and the freelist aren't written.
-- Slotted pages do not have dedicated tests yet.
 
 ## Tests
 
@@ -134,6 +133,8 @@ cargo test -p pagefile
 ```
 
 The unit tests check page sizes, page numbers and the CRC check value. `tests/corrupt.rs` runs on `vfs::Mem`. It refuses foreign and cut-short files, catches a torn header, and catches every single-bit flip in a page.
+
+`tests/slotted.rs` checks 100,000 random operations against a `Vec` model. It also checks compaction after removals and the largest item a page can hold.
 
 ## Learn more
 
