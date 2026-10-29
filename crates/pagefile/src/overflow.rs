@@ -1,6 +1,6 @@
 //! Overflow chains: values too big for one page.
 //!
-//! A long value is just cut into pieces, one per workflow page, and each page holds
+//! A long value is just cut into pieces, one per overflow page, and each page holds
 //! the number of the next.
 //!
 //! ```text
@@ -105,7 +105,7 @@ pub fn free_chain<S: PageStore + ?Sized>(store: &mut S, first: PageNo) -> Result
     while let Some(n) = next {
         store.read(n, &mut page)?;
         // If the chain loops, it comes back to a page this loop already freed.
-        // That page's kind is not free, so the loop stops here.
+        // That page's kind is now free, so the loop stops here.
         if page.kind() != Some(PageKind::Overflow) {
             let found = page.bytes()[0];
             return Err(Error::WrongKind {

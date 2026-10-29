@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{Error, PageFile, PageKind, PageNo, PageStore, Result, Slotted, overflow::NEXT};
+use crate::{Error, PageFile, PageKind, PageNo, PageStore, Result, Slotted, freelist::FREE_NEXT};
 
 /// What `check` found.
 #[derive(Debug, Default)]
@@ -21,7 +21,7 @@ pub struct Report {
 /// Reads every page of `file` and walks its freelist.
 ///
 /// Damaged pages are reported, not returned as errors. Only an I/O error
-/// stops the chek.
+/// stops the check.
 pub fn check(file: &PageFile) -> Result<Report> {
     let mut report = Report::default();
     report.kinds.insert("header", 1);
@@ -79,7 +79,7 @@ pub fn check(file: &PageFile) -> Result<Report> {
             break;
         }
         file.read(n, &mut page)?;
-        next = PageNo::new(page.u32_at(NEXT));
+        next = PageNo::new(page.u32_at(FREE_NEXT));
     }
     let count = file.header().free_count;
     if on_list.len() as u32 != count {
@@ -96,7 +96,7 @@ pub fn check(file: &PageFile) -> Result<Report> {
 
     let expected = file.page_count() as u64 * file.page_size() as u64;
     let len = file.file_len()?;
-    if len < expected {
+    if len > expected {
         report.problems.push(format!(
             "the file has {} bytes after its last page",
             len - expected

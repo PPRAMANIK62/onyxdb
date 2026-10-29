@@ -208,7 +208,7 @@ impl<B: DerefMut<Target = Page>> Slotted<B> {
         Ok(())
     }
 
-    /// Removes item `i`, moving later items down by one. It's bytes stay where
+    /// Removes item `i`, moving later items down by one. Its bytes stay where
     /// they are and count as garbage until the next compaction.
     ///
     /// Panics if `i >= len()`, like `Vec::remove`.
