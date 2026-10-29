@@ -78,6 +78,11 @@ fn append<S: PageStore + ?Sized>(store: &mut S, mut header: Header) -> Result<Pa
     let n = PageNo::new(n).expect("page 0 always exists, so a new page is never page 0");
     let mut page = store.new_page();
     page.reset(PageKind::Empty);
-    store.write(n, &mut page)?;
+    if let Err(e) = store.write(n, &mut page) {
+        // Take the page back out of the count, so a failed allocate changes nothing.
+        header.page_count = n.get();
+        store.write_header(&header)?;
+        return Err(e);
+    }
     Ok(n)
 }

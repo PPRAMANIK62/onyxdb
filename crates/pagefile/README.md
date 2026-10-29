@@ -234,7 +234,7 @@ problem: page 4 is free but not on the freelist
   Cost: the list falls out of page order, so pages allocated together can sit far apart in the file.
 - **Taking a page off the list and freeing one write the page before the header.**
   Why: a crash between the two writes leaves a page that's off the list (`free`) or a header that points at a page that isn't free (`allocate`). The page is lost or the next `allocate` refuses it, but it's never handed out twice.
-  Growing the file goes the other way: the header first, because a store only writes pages below the page count.
+  Growing the file goes the other way: the header first, because a store only writes pages below the page count. If the page write then fails, the count is lowered again, so a failed `allocate` leaves the header as it was.
   Cost: a crash can leak a page. `check` finds it.
 - **`free` refuses a page that's already free, and `allocate` refuses a list page that isn't.**
   Why: a page freed twice would point at itself and be handed out forever.
