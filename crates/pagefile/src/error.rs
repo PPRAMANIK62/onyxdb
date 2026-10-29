@@ -66,6 +66,9 @@ pub enum Error {
     },
     /// `free` was called on a page that's already on the freelist.
     DoubleFree(u32),
+    /// An overflow chain that ends too early, runs too long, or has a page with
+    /// a bad length.
+    BadChain(String),
 }
 
 /// What every function in this crate returns.
@@ -130,6 +133,7 @@ impl fmt::Display for Error {
                 expected.name()
             ),
             Error::DoubleFree(page) => write!(f, "page {page} is already free"),
+            Error::BadChain(why) => write!(f, "bad overflow chain: {why}"),
         }
     }
 }

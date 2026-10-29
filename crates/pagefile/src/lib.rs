@@ -6,6 +6,7 @@ mod error;
 pub mod file;
 pub mod freelist;
 pub mod header;
+pub mod overflow;
 pub mod page;
 pub mod slotted;
 pub mod store;
