@@ -19,7 +19,7 @@ Page 0 is a header that says what the file is. Every other page starts with a by
 |---|---|---|
 | `PageFile` | a page file: `create`, `open`, `header`, `page_count`, `set_user`, `sync`, and `read_page`, `write_page` for a cache in front of it | you open or create a file |
 | `PageStore` | a trait: `page_size`, `read`, `write`, `read_header`, `write_header`, `new_page` | you read or write pages, through a file or anything that stands in for one |
-| `Page` | the bytes of one page: `kind`, `lsn`, `set_lsn`, and number readers and writers | you look at or change a page's bytes |
+| `Page` | the bytes of one page: `kind`, `expect_kind`, `lsn`, `set_lsn`, and number readers and writers | you look at or change a page's bytes |
 | `PageNo`, `PageKind` | a page number, never 0, and a page's kind | you name a page or check what it holds |
 | `Header` | the fields of page 0, with 32 bytes for your own use | you need the page size, the page count or the user bytes |
 | `Slotted` | many variable-size items in one page: `insert`, `get`, `remove`, `replace`, `compact` | you store small items in order |

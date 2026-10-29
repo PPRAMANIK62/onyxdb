@@ -69,14 +69,7 @@ pub fn read_chain<S: PageStore + ?Sized>(store: &S, first: PageNo, len: usize) -
             return Err(Error::BadChain(why));
         };
         store.read(n, &mut page)?;
-        if page.kind() != Some(PageKind::Overflow) {
-            let found = page.bytes()[0];
-            return Err(Error::WrongKind {
-                page: n.get(),
-                expected: PageKind::Overflow,
-                found,
-            });
-        }
+        page.expect_kind(n, PageKind::Overflow)?;
         // Every page must hold at least one byte, so a chain that loops back on
         // itself still ends after at most `len` pages.
         let used = page.u16_at(USED) as usize;
@@ -106,14 +99,7 @@ pub fn free_chain<S: PageStore + ?Sized>(store: &mut S, first: PageNo) -> Result
         store.read(n, &mut page)?;
         // If the chain loops, it comes back to a page this loop already freed.
         // That page's kind is now free, so the loop stops here.
-        if page.kind() != Some(PageKind::Overflow) {
-            let found = page.bytes()[0];
-            return Err(Error::WrongKind {
-                page: n.get(),
-                expected: PageKind::Overflow,
-                found,
-            });
-        }
+        page.expect_kind(n, PageKind::Overflow)?;
         next = PageNo::new(page.u32_at(NEXT));
         freelist::free(store, n)?;
     }

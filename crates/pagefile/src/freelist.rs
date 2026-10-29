@@ -53,14 +53,7 @@ pub fn free<S: PageStore + ?Sized>(store: &mut S, n: PageNo) -> Result<()> {
 fn pop<S: PageStore + ?Sized>(store: &mut S, mut header: Header, head: PageNo) -> Result<PageNo> {
     let mut page = store.new_page();
     store.read(head, &mut page)?;
-    if page.kind() != Some(PageKind::Free) {
-        let found = page.bytes()[0];
-        return Err(Error::WrongKind {
-            page: head.get(),
-            expected: PageKind::Free,
-            found,
-        });
-    }
+    page.expect_kind(head, PageKind::Free)?;
     let next = PageNo::new(page.u32_at(FREE_NEXT));
     page.reset(PageKind::Empty);
     store.write(head, &mut page)?;

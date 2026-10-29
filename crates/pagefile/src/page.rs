@@ -144,6 +144,18 @@ impl Page {
         PageKind::from_byte(self.bytes[0])
     }
 
+    /// Checks that this page, page `n`, has kind `kind`.
+    pub fn expect_kind(&self, n: PageNo, kind: PageKind) -> Result<()> {
+        if self.kind() == Some(kind) {
+            return Ok(());
+        }
+        Err(Error::WrongKind {
+            page: n.get(),
+            expected: kind,
+            found: self.bytes[0],
+        })
+    }
+
     /// Sets the kind byte and every byte after the LSN to zero. The LSN stays,
     /// because a page's LSN only ever moves forward.
     pub fn reset(&mut self, kind: PageKind) {
