@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use pagefile::{PageFile, PageKind, PageNo, PageStore, Slotted, freelist};
+use pagefile::{PageFile, PageKind, PageNo, PageStore, Slotted, check::check, freelist};
 use vfs::{Mem, Rng};
 
 #[test]
@@ -121,4 +121,17 @@ fn run(seed: u64) -> PageFile {
     }
     assert_eq!(file.header().free_count as usize, model.free.len());
     file
+}
+
+#[test]
+fn random_operations_leave_a_healthy_file() {
+    for seed in 1..=20 {
+        let file = run(seed);
+        let report = check(&file).unwrap();
+        assert!(
+            report.problems.is_empty(),
+            "seed {seed}: {:?}",
+            report.problems
+        );
+    }
 }
