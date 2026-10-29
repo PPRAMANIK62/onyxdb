@@ -1,6 +1,6 @@
 # pagefile
 
-A file of fixed-size, numbered pages. Status: done.
+A file of fixed-size, numbered pages.
 
 ```text
  page 0     page 1     page 2     page 3     page 4
