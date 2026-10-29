@@ -4,6 +4,7 @@
 pub mod crc;
 mod error;
 pub mod file;
+pub mod freelist;
 pub mod header;
 pub mod page;
 pub mod slotted;

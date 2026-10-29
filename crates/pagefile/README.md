@@ -16,9 +16,10 @@ This is the bottom layer of the database. Everything stored on disk in pages goe
 | Create, open, read and write pages through `vfs` | done |
 | Tests for damaged, torn and foreign files | done |
 | Slotted pages | done |
-| Allocating and freeing pages (the freelist) | not yet |
+| Allocating and freeing pages (the freelist) | done |
 | Overflow chains | not yet |
-| Model and fuzz tests over the whole file | not yet |
+| Model test of allocate and free | done |
+| A whole-file check and a fuzz test | not yet |
 
 ## Use
 
@@ -46,6 +47,7 @@ assert_eq!(file.header().user, [7; 32]);
 - `store`: the `PageStore` trait for reading and writing pages and the header.
 - `file`: `PageFile`, a page file opened through a `vfs::Vfs`, that implements `PageStore`.
 - `slotted`: variable-size items with insertion, removal, replacement and compaction.
+- `freelist`: `allocate` and `free`, which reuse freed pages before the file grows.
 
 ## Format
 
@@ -69,6 +71,13 @@ offset  size  field
     26    32  user bytes, for the code using this crate
     58     .  zeros
 size-4     4  CRC-32C of everything before it
+
+a free page
+byte 0      1          9                  13          size - 4    size
+     +------+----------+------------------+-----------+-----------+
+     | 1    | LSN      | next free page   | zeros     | CRC-32C   |
+     +------+----------+------------------+-----------+-----------+
+     next free page is 0 on the last page of the list
 
 page kinds
   0  empty     allocated, never written
@@ -115,6 +124,19 @@ page kinds
 - **`PageStore` is a trait, and `PageFile` is one implementation.**
   Why: a page cache can implement the same trait and stand in for the file.
   Cost: one trait to keep stable.
+- **`allocate` and `free` are functions over any `PageStore`, not methods of `PageFile`.**
+  Why: with a page cache in front of the file, the pages and the header they change go through the cache too.
+  Cost: each call reads the header through the trait.
+- **`free` puts a page at the front of the list, so the list works as a stack.**
+  Why: freeing a page writes only that page and the header. Adding at the back means walking the list or keeping a tail page to rewrite.
+  Cost: the list falls out of page order, so pages allocated together can sit far apart in the file.
+- **Taking a page off the list and freeing one write the page before the header.**
+  Why: a crash between the two writes leaves a page that's off the list (`free`) or a header that points at a page that isn't free (`allocate`). The page is lost or the next `allocate` refuses it, but it's never handed out twice.
+  Growing the file goes the other way: the header first, because a store only writes pages below the page count.
+  Cost: a crash can leak a page until a check finds it.
+- **`free` refuses a page that's already free, and `allocate` refuses a list page that isn't.**
+  Why: a page freed twice would point at itself and be handed out forever.
+  Cost: one kind check per call. A page leaked by a crash can't be freed again.
 - **Errors name the rule that broke and carry the numbers involved.**
   Why: "page 3 is damaged: its checksum is 1a2b3c4d, but its bytes give 5e6f7a8b" can be acted on.
   Cost: a larger error enum.
@@ -124,7 +146,9 @@ page kinds
 - Changes to several pages aren't atomic. A crash between two writes leaves some old pages and some new ones.
 - A lost write goes unnoticed, as described under the checksum decision.
 - Every read goes to the disk. Nothing is cached.
-- There is no way yet to add pages to a file. Allocation and the freelist aren't written.
+- A crash between the two writes of `allocate` or `free` leaks a page, and nothing finds it yet.
+- A crash in `allocate` after the header grows but before the new page is written leaves a file that's too short, and `open` refuses it.
+- The file never shrinks. Freed pages are reused, but never given back.
 
 ## Tests
 
@@ -133,6 +157,8 @@ cargo test -p pagefile
 ```
 
 The unit tests check page sizes, page numbers and the CRC check value. `tests/corrupt.rs` runs on `vfs::Mem`. It refuses foreign and cut-short files, catches a torn header, and catches every single-bit flip in a page.
+
+`tests/model.rs` runs 20 seeds of 400 random steps: allocate and write, free, close and reopen, and read. A `BTreeMap` of pages in use and a `BTreeSet` of free pages must match the file at every read and at the end. It also checks that freed pages come back before the file grows, and that freeing a page twice is an error.
 
 `tests/slotted.rs` checks 100,000 random operations against a `Vec` model. It also checks compaction after removals and the largest item a page can hold.
 

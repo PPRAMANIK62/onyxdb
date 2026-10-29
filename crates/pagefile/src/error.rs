@@ -7,6 +7,8 @@ use std::{error, fmt, result};
 
 use vfs::{self};
 
+use crate::PageKind;
+
 /// Everything that can go wrong opening or using a page file.
 #[derive(Debug)]
 pub enum Error {
@@ -51,6 +53,19 @@ pub enum Error {
         /// Bytes the page has free, garbage included.
         room: usize,
     },
+    /// The file already holds the largest page number a u32 can count.
+    TooManyPages,
+    /// A page has a different kind from the one the operation needs.
+    WrongKind {
+        /// The page number.
+        page: u32,
+        /// The kind the operation needs.
+        expected: PageKind,
+        /// The kind byte the page has.
+        found: u8,
+    },
+    /// `free` was called on a page that's already on the freelist.
+    DoubleFree(u32),
 }
 
 /// What every function in this crate returns.
@@ -104,6 +119,17 @@ impl fmt::Display for Error {
                     "the item needs {need} bytes, but the page has {room} free"
                 )
             }
+            Error::TooManyPages => write!(f, "the file can't hold more than 4294967295 pages"),
+            Error::WrongKind {
+                page,
+                expected,
+                found,
+            } => write!(
+                f,
+                "page {page} should be a {} page, but its kind byte is {found}",
+                expected.name()
+            ),
+            Error::DoubleFree(page) => write!(f, "page {page} is already free"),
         }
     }
 }
