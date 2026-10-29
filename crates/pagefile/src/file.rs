@@ -36,15 +36,28 @@ impl PageFile {
         n as u64 * self.header.page_size as u64
     }
 
-    /// Reads page `n` into `page`. No range or checksum check.
-    fn read_raw(&self, n: u32, page: &mut Page) -> Result<()> {
+    /// Reads page `n` into `page` and checks its checksum. It doesn't check
+    /// `n` against the page count: `read` does, and a cache in front of the
+    /// file checks it against its own header.
+    pub fn read_page(&self, n: u32, page: &mut Page) -> Result<()> {
+        assert_eq!(
+            page.size(),
+            self.header.page_size as usize,
+            "the page buffer has the wrong size"
+        );
         self.file.read_at(page.bytes_mut(), self.offset(n))?;
-        Ok(())
+        page.verify(n)
     }
 
-    /// Writes a `page` as page `n`. No range check, and the checksum is written
-    /// as it is.
-    fn write_raw(&self, n: u32, page: &Page) -> Result<()> {
+    /// Sets the checksum of `page` and writes it as page `n`. Like
+    /// `read_page`, it doesn't check `n` against the page count.
+    pub fn write_page(&self, n: u32, page: &mut Page) -> Result<()> {
+        assert_eq!(
+            page.size(),
+            self.header.page_size as usize,
+            "the page buffer has the wrong size"
+        );
+        page.seal();
         self.file.write_at(page.bytes(), self.offset(n))?;
         Ok(())
     }
@@ -53,17 +66,11 @@ impl PageFile {
     fn save_header(&self) -> Result<()> {
         let mut page = Page::new(self.header.page_size as usize);
         self.header.encode(&mut page);
-        page.seal();
-        self.write_raw(0, &page)
+        self.write_page(0, &mut page)
     }
 
-    /// Checks that `n` is inside the file and that `page` has the file's page size.
-    fn check(&self, n: PageNo, page: &Page) -> Result<()> {
-        assert_eq!(
-            page.size(),
-            self.page_size(),
-            "the page buffer has the wrong size"
-        );
+    /// Checks that page `n` is inside the file.
+    fn check(&self, n: PageNo) -> Result<()> {
         if n.get() >= self.header.page_count {
             return Err(Error::OutOfRange {
                 page: n.get(),
@@ -162,14 +169,12 @@ impl PageStore for PageFile {
     }
 
     fn read(&self, n: PageNo, page: &mut Page) -> Result<()> {
-        self.check(n, page)?;
-        self.read_raw(n.get(), page)?;
-        page.verify(n.get())
+        self.check(n)?;
+        self.read_page(n.get(), page)
     }
 
     fn write(&mut self, n: PageNo, page: &mut Page) -> Result<()> {
-        self.check(n, page)?;
-        page.seal();
-        self.write_raw(n.get(), page)
+        self.check(n)?;
+        self.write_page(n.get(), page)
     }
 }

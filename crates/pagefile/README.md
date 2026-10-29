@@ -17,7 +17,7 @@ Page 0 is a header that says what the file is. Every other page starts with a by
 
 | Item | What it is | Use it when |
 |---|---|---|
-| `PageFile` | a page file: `create`, `open`, `header`, `page_count`, `set_user`, `sync` | you open or create a file |
+| `PageFile` | a page file: `create`, `open`, `header`, `page_count`, `set_user`, `sync`, and `read_page`, `write_page` for a cache in front of it | you open or create a file |
 | `PageStore` | a trait: `page_size`, `read`, `write`, `read_header`, `write_header`, `new_page` | you read or write pages, through a file or anything that stands in for one |
 | `Page` | the bytes of one page: `kind`, `lsn`, `set_lsn`, and number readers and writers | you look at or change a page's bytes |
 | `PageNo`, `PageKind` | a page number, never 0, and a page's kind | you name a page or check what it holds |
@@ -217,6 +217,9 @@ problem: page 4 is free but not on the freelist
 - **The freelist and overflow chains are functions over any `PageStore`, not methods of `PageFile`.**
   Why: with a page cache in front of the file, the pages and the header they change go through the cache too.
   Cost: each call reads the header through the trait.
+- **`read_page` and `write_page` read and write any page by number, without the page count check.**
+  Why: a cache in front of the file keeps its own header, which counts new pages before the header on disk does. The check belongs to whoever owns the header, so the cache does it. The file keeps the raw page I/O and the checksum.
+  Cost: code that calls them directly can write past the end. `check` reports those pages as stray bytes after the last page.
 - **Slot order is the items' order, and inserting or removing shifts the slots after it.**
   Why: the code using the page keeps its items sorted by moving 4-byte slots, never the item bytes.
   Cost: a slot number isn't a stable name for an item, so nothing outside the page can hold on to one. PostgreSQL keeps slot numbers fixed instead, because its indexes point at rows by (page, slot).

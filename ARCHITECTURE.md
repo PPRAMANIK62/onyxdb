@@ -125,7 +125,7 @@ kinds: 0 empty · 1 free · 2 slotted · 3 overflow        page 0: the header
 | freelist | freed pages, linked through themselves, reused before the file grows |
 | `PageStore` | read and write pages by number. The freelist and overflow code work through it |
 
-Allocation goes through `PageStore`. So with a buffer pool in front, every change lands in a cached frame and is logged before it reaches the file. That includes changes to the header and the freelist.
+Allocation goes through `PageStore`. So with a buffer pool in front, every change lands in a cached frame and is logged before it reaches the file. That includes changes to the header and the freelist. The pool owns the header then, so it uses the file's raw page I/O (`read_page`, `write_page`) and checks page numbers against its own header.
 
 ## 3. Buffer pool: `bufpool`
 
