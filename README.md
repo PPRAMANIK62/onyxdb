@@ -12,7 +12,7 @@ Each crate has a README with its design, its format and the decisions behind it.
 |---|---|---|---|
 | 1 | [`vfs`](crates/vfs) | file I/O behind a trait: the real disk, or a file system in memory that can crash, tear writes and fail `fsync`. Also file locks | done |
 | 2 | [`pagefile`](crates/pagefile) | a file of fixed-size, checksummed pages: slotted pages, a freelist and overflow chains | done |
-| 3 | `bufpool` | a buffer pool: frames, eviction, the write-ahead rule, latches | planned |
+| 3 | [`bufpool`](crates/bufpool) | a buffer pool: frames, eviction, the write-ahead rule, latches | in progress |
 | 4 | `wal` | a write-ahead log: group commit, replay, checkpoints | planned |
 | 5 | `kv` | the ordered key-value trait, an in-memory model engine and a shared test suite | planned |
 | 6 | `mvcc` | transactions: snapshots, a lock manager, deadlocks, serializable isolation with phantoms | planned |

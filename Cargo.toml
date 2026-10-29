@@ -12,3 +12,4 @@ todo = "warn"
 
 [workspace.dependencies]
 vfs = { path = "crates/vfs" }
+pagefile = { path = "crates/pagefile" }

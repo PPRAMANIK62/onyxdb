@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "bufpool"
+version = "0.1.0"
+dependencies = [
+ "pagefile",
+ "vfs",
+]
+
+[[package]]
 name = "pagefile"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,13 @@
+[package]
+name = "bufpool"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pagefile = { workspace = true }
+
+[dev-dependencies]
+vfs = { workspace = true }
+
+[lints]
+workspace = true
