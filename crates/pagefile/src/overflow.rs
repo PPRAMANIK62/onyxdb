@@ -33,7 +33,7 @@ pub fn capacity(page_size: usize) -> usize {
 /// Stores `data` in a new chain of overflow pages and returns the first page.
 ///
 /// Panics if `data` is empty: a chain holds at least one byte.
-pub fn write_chain<S: PageStore + ?Sized>(store: &mut S, data: &[u8]) -> Result<PageNo> {
+pub fn write_chain<S: PageStore + ?Sized>(store: &mut S, data: &[u8]) -> Result<PageNo, S::Error> {
     assert!(
         !data.is_empty(),
         "an overflow chain needs at least one byte"
@@ -55,7 +55,11 @@ pub fn write_chain<S: PageStore + ?Sized>(store: &mut S, data: &[u8]) -> Result<
 }
 
 /// Read the `len` bytes stored in the chain that starts at `first`.
-pub fn read_chain<S: PageStore + ?Sized>(store: &S, first: PageNo, len: usize) -> Result<Vec<u8>> {
+pub fn read_chain<S: PageStore + ?Sized>(
+    store: &S,
+    first: PageNo,
+    len: usize,
+) -> Result<Vec<u8>, S::Error> {
     let cap = capacity(store.page_size());
     let mut data = Vec::with_capacity(len);
     let mut page = store.new_page();
@@ -66,7 +70,7 @@ pub fn read_chain<S: PageStore + ?Sized>(store: &S, first: PageNo, len: usize) -
                 "the chain from page {first} ends after {} of {len} bytes",
                 data.len()
             );
-            return Err(Error::BadChain(why));
+            return Err(Error::BadChain(why).into());
         };
         store.read(n, &mut page)?;
         page.expect_kind(n, PageKind::Overflow)?;
@@ -78,7 +82,7 @@ pub fn read_chain<S: PageStore + ?Sized>(store: &S, first: PageNo, len: usize) -
             let why = format!(
                 "page {n} says it holds {used} bytes, but it can hold 1 to {cap} and {left} are left"
             );
-            return Err(Error::BadChain(why));
+            return Err(Error::BadChain(why).into());
         }
         data.extend_from_slice(&page.bytes()[DATA..DATA + used]);
         next = PageNo::new(page.u32_at(NEXT));
@@ -86,13 +90,13 @@ pub fn read_chain<S: PageStore + ?Sized>(store: &S, first: PageNo, len: usize) -
     if let Some(n) = next {
         let why =
             format!("the chain from page {first} holds all {len} bytes but goes on to page {n}");
-        return Err(Error::BadChain(why));
+        return Err(Error::BadChain(why).into());
     }
     Ok(data)
 }
 
 /// Frees every page of the chain that starts at `first`.
-pub fn free_chain<S: PageStore + ?Sized>(store: &mut S, first: PageNo) -> Result<()> {
+pub fn free_chain<S: PageStore + ?Sized>(store: &mut S, first: PageNo) -> Result<(), S::Error> {
     let mut page = store.new_page();
     let mut next = Some(first);
     while let Some(n) = next {

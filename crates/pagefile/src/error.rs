@@ -71,8 +71,9 @@ pub enum Error {
     BadChain(String),
 }
 
-/// What every function in this crate returns.
-pub type Result<T> = result::Result<T, Error>;
+/// What every function in this crate returns. Functions over a `PageStore`
+/// return the store's error instead.
+pub type Result<T, E = Error> = result::Result<T, E>;
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -155,6 +155,8 @@ impl PageFile {
 }
 
 impl PageStore for PageFile {
+    type Error = Error;
+
     fn page_size(&self) -> usize {
         self.header.page_size as usize
     }

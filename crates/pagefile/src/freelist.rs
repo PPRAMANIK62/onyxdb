@@ -22,10 +22,10 @@ pub const FREE_NEXT: usize = 9;
 // "`S` can be any type that implements `PageStore`, including types whose size
 // isn't known at compile time."
 // `S` is any type that implements `PageStore`. The `?Sized` lets `S` also be
-// `dyn PageStore`, so code that holds `&mut dyn PageStore` can call these too.
-// Without it Rust only accepts types whose size is known at compile time, and
-// `dyn PageStore` isn't one of them.
-pub fn allocate<S: PageStore + ?Sized>(store: &mut S) -> Result<PageNo> {
+// a trait object, so code that holds `&mut dyn PageStore<Error = E>` can call
+// these too. Without it Rust only accepts types whose size is known at compile
+// time, and a trait object isn't one of them.
+pub fn allocate<S: PageStore + ?Sized>(store: &mut S) -> Result<PageNo, S::Error> {
     let header = store.read_header()?;
     match header.free_head {
         Some(head) => pop(store, header, head),
@@ -34,12 +34,12 @@ pub fn allocate<S: PageStore + ?Sized>(store: &mut S) -> Result<PageNo> {
 }
 
 /// Puts page `n` on the freelist. Don't use it again until `allocate` returns it.
-pub fn free<S: PageStore + ?Sized>(store: &mut S, n: PageNo) -> Result<()> {
+pub fn free<S: PageStore + ?Sized>(store: &mut S, n: PageNo) -> Result<(), S::Error> {
     let mut header = store.read_header()?;
     let mut page = store.new_page();
     store.read(n, &mut page)?;
     if page.kind() == Some(PageKind::Free) {
-        return Err(Error::DoubleFree(n.get()));
+        return Err(Error::DoubleFree(n.get()).into());
     }
     page.reset(PageKind::Free);
     page.put_u32(FREE_NEXT, link_to_u32(header.free_head));
@@ -50,7 +50,11 @@ pub fn free<S: PageStore + ?Sized>(store: &mut S, n: PageNo) -> Result<()> {
 }
 
 /// Takes `head`, the first page on the freelist, off the list and empties it.
-fn pop<S: PageStore + ?Sized>(store: &mut S, mut header: Header, head: PageNo) -> Result<PageNo> {
+fn pop<S: PageStore + ?Sized>(
+    store: &mut S,
+    mut header: Header,
+    head: PageNo,
+) -> Result<PageNo, S::Error> {
     let mut page = store.new_page();
     store.read(head, &mut page)?;
     page.expect_kind(head, PageKind::Free)?;
@@ -67,7 +71,7 @@ fn pop<S: PageStore + ?Sized>(store: &mut S, mut header: Header, head: PageNo) -
 
 /// Adds an empty page at the end of the file. The header counts it first,
 /// because a store only writes pages below the page count.
-fn append<S: PageStore + ?Sized>(store: &mut S, mut header: Header) -> Result<PageNo> {
+fn append<S: PageStore + ?Sized>(store: &mut S, mut header: Header) -> Result<PageNo, S::Error> {
     let n = header.page_count;
     header.page_count = n.checked_add(1).ok_or(Error::TooManyPages)?;
     store.write_header(&header)?;
